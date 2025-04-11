@@ -19,10 +19,10 @@ int LimiteServoHorizontalMin = 65;   // Estabele os limites de rotação
 int LimiteServoVerticalMax = 120;    // Estabele os limites de rotação
 int LimiteServoVerticalMin = 15;     // Estabele os limites de rotação
 
-int LDRDC = A0;             // Inicia LDRDC no pino A0
-int LDRDB = A1;             // Inicia LDRDB no pino A1
-int LDREC = A2;             // Inicia LDREC no pino A2
-int LDREB = A3;             // Inicia LDREB no pino A3
+int LDRDC = 48;             // Inicia LDRDC no pino A0
+int LDRDB = 47;             // Inicia LDRDB no pino A1
+int LDREC = 42;             // Inicia LDREC no pino A2
+int LDREB = 41;             // Inicia LDREB no pino A3
 
 bool sistemaLigado = true;
 bool reiniciarSistema = false;
@@ -31,6 +31,7 @@ bool reiniciarSistema = false;
 String desligarAte = "00:00";
 String estacaoAno = "Verao";
 int diaDesligar = 0;
+unsigned long ultimaVerificacaoHora = 0;
 
 
 String getHTML() {
@@ -249,11 +250,7 @@ String getConfigHTML() {
     <h1>CONFIGURAÇÕES</h1>
     
     <form action="/saveconfig" method="POST">
-      <div class="form-group">
-        <label for="desligarAte">Desligar automaticamente às:</label>
-        <input type="time" id="desligarAte" name="desligarAte" value=")rawliteral" + desligarAte + R"rawliteral(">
-      </div>
-      
+    
       <div class="form-group">
         <label for="estacaoAno">Estação do ano:</label>
         <select id="estacaoAno" name="estacaoAno">
@@ -262,13 +259,7 @@ String getConfigHTML() {
           <option value="Inverno")rawliteral" + (estacaoAno == "Inverno" ? " selected" : "") + R"rawliteral(>Inverno</option>
           <option value="Primavera")rawliteral" + (estacaoAno == "Primavera" ? " selected" : "") + R"rawliteral(>Primavera</option>
         </select>
-      </div>
-      
-      <div class="form-group">
-        <label for="diaDesligar">Desligar no dia (0=desativado):</label>
-        <input type="number" id="diaDesligar" name="diaDesligar" min="0" max="31" value=")rawliteral" + String(diaDesligar) + R"rawliteral(">
-      </div>
-      
+      </div>      
       <button type="submit">SALVAR</button>
       <button type="button" onclick="window.location.href='/'">VOLTAR</button>
     </form>
@@ -289,9 +280,7 @@ void handleConfig() {
 }
 
 void handleSaveConfig() {
-  desligarAte = server.arg("desligarAte");
   estacaoAno = server.arg("estacaoAno");
-  diaDesligar = server.arg("diaDesligar").toInt();
   
   server.sendHeader("Location", "/");
   server.send(303);
@@ -319,8 +308,8 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  Horizontal.attach(3);     // Inicia servo Horizontal na porta D3
-  Vertical.attach(5);       // Inicia servo Vertical na porta D5
+  Horizontal.attach(45);     // Inicia servo Horizontal na porta D3
+  Vertical.attach(46);       // Inicia servo Vertical na porta D5
 
   Horizontal.write(180);    // Inicia servo Horizontal na posição 180
   Vertical.write(45);       // Inicia servo Horizontal na posição 45
@@ -352,12 +341,6 @@ void loop() {
 
     if(reiniciarSistema){
       reiniciarSistema = false;
-    }
-
-    if(currentTime >= desligarAte && desligarAte != "00:00"){
-      sistemaLigado=false;
-      Horizontal.write(90);
-      Vertical.write(45);
     }
       int LDC = analogRead(LDRDC);      // Leitura Analógica do LDR Direita Cima
       int LEC = analogRead(LDREC);      // Leitura Analógica do LDR Esquerda Cima
@@ -417,7 +400,6 @@ void loop() {
 
 
 String getCurrentTime() {
-  // Esta é uma simulação - na prática você precisaria de um RTC ou NTP
-  // Aqui estamos usando o horário do cliente via JavaScript
-  return "00:00"; // Placeholder - o real é controlado pelo JavaScript
+ //RTC ou NTP
+  return "00:00";
 }
