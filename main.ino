@@ -44,7 +44,7 @@ String getHTML() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CONTROLE SOLAR MATRIX</title>
+  <title>RASTREADOR SOLAR</title>
   <style>
     body {
       background-color: #000000;
