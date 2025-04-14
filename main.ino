@@ -28,10 +28,15 @@ bool sistemaLigado = true;
 bool reiniciarSistema = false;
 
 
-String desligarAte = "00:00";
+
 String estacaoAno = "Verao";
-int diaDesligar = 0;
-unsigned long ultimaVerificacaoHora = 0;
+unsigned long lastTimeUpdate = 0;
+int currentHour = 0;
+int currentMinute = 0;
+int hora_desligar = 20; // Hora padrão para desligar (20h)
+int hora_ligar = 6;
+int estacaoNumero = 0;
+bool sobrescreverAuto = false;// Adicione esta variável para controle manual
 
 
 String getHTML() {
@@ -271,6 +276,66 @@ String getConfigHTML() {
   return html;
 }
 
+void ajustarHorariosPorEstacao(){
+    if(estacaoAno == 0){
+        hora_desligar = 20;
+        hora_ligar = 6;
+        return;
+    }
+
+    switch(estacaoNumero){
+    case 1: // Verão
+      hora_desligar = 20;
+      hora_ligar = 6;
+      break;
+    case 2: // Outono
+      hora_desligar = 18;
+      hora_ligar = 7;
+      break;
+    case 3: // Inverno
+      hora_desligar = 17;
+      hora_ligar = 7;
+      break;
+    case 4: // Primavera
+      hora_desligar = 19;
+      hora_ligar = 6;
+      break;
+    }
+
+    Serial.print("Estação: "); Serial.println(getNomeEstacao());
+    Serial.print("Hora ligar: "); Serial.println(hora_ligar);
+    Serial.print("Hora desligar: "); Serial.println(hora_desligar);
+}
+
+String getNomeEstacao() {
+    switch(estacaoNumero) {
+      case 0: return "Padrão (20h-6h)";
+      case 1: return "Verão";
+      case 2: return "Outono";
+      case 3: return "Inverno";
+      case 4: return "Primavera";
+      default: return "Desconhecida";
+    }
+}
+
+String getCurrentTime() {
+  // Atualiza o relógio a cada minuto
+  if (millis() - lastTimeUpdate >= 60000) { // 60000ms = 1 minuto
+    lastTimeUpdate = millis();
+    currentMinute++;
+    if (currentMinute >= 60) {
+      currentMinute = 0;
+      currentHour++;
+      if (currentHour >= 24) {
+        currentHour = 0;
+      }
+    }
+  }
+  char timeStr[6];
+  snprintf(timeStr, sizeof(timeStr), "%02d:%02d", currentHour, currentMinute);
+  return String(timeStr);
+}
+
 void handleRoot() {
   server.send(200, "text/html", getHTML());
 }
@@ -280,14 +345,17 @@ void handleConfig() {
 }
 
 void handleSaveConfig() {
-  estacaoAno = server.arg("estacaoAno");
-  
-  server.sendHeader("Location", "/");
-  server.send(303);
+    if (server.hasArg("estacaoAno")) {
+      estacaoNumero = server.arg("estacaoAno").toInt();
+      ajustarHorariosPorEstacao();
+    }
+    server.sendHeader("Location", "/");
+    server.send(303);
 }
 
 void handleToggle() {
   sistemaLigado = !sistemaLigado;
+  sobrescreverAuto  = sistemaLigado;
   
   if (!sistemaLigado) {
     // Posição de repouso quando desliga
@@ -297,6 +365,18 @@ void handleToggle() {
   
   server.sendHeader("Location", "/");
   server.send(303);
+}
+
+bool shouldTurnOff() {
+  String currentTime = getCurrentTime();
+  int hour = currentTime.substring(0, 2).toInt();
+  return (hour == hora_desligar); // 20h (8PM)
+}
+
+bool shouldTurnOn() {
+    String currentTime = getCurrentTime();
+    int hour = currentTime.substring(0, 2).toInt();
+    return (hour == hora_ligar);
 }
 
 void handleRestart() {
@@ -320,6 +400,9 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(IP);
 
+  currentHour = 19;
+  currentMinute = 59;
+
   // Configura rotas do servidor web
   server.on("/toggle", HTTP_POST, handleToggle);
   
@@ -331,10 +414,30 @@ void setup() {
   server.on("/saveconfig", HTTP_POST, handleSaveConfig);
   server.on("/toggle", HTTP_POST, handleToggle);
   server.on("/restart", HTTP_POST, handleRestart);
+
+  ajustarHorariosPorEstacao();
 }
 
 void loop() {
   server.handleClient();
+
+  if(!sobrescreverAuto){
+  if (!sistemaLigado && shouldTurnOn()) {
+    sistemaLigado = true;
+    Serial.println("Sistema ligado automaticamente às " + String(hora_ligar) + "h");
+  }
+  else if (sistemaLigado && shouldTurnOff()) {
+    sistemaLigado = false;
+    Horizontal.write(90);
+    Vertical.write(45);
+    Serial.println("Sistema desligado automaticamente às " + String(hora_desligar) + "h");
+  }
+}
+
+String currentTime = getCurrentTime();
+if(currentTime == "06:00") {
+  sobrescreverAuto = false;
+}
 
   if(sistemaLigado){
     String currentTime = getCurrentTime();
@@ -396,10 +499,4 @@ void loop() {
       delay(100);   // Aguarda 0,1 segundo
       
   }
-}
-
-
-String getCurrentTime() {
- //RTC ou NTP
-  return "00:00";
 }
