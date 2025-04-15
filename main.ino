@@ -19,10 +19,10 @@ int LimiteServoHorizontalMin = 65;   // Estabele os limites de rotação
 int LimiteServoVerticalMax = 120;    // Estabele os limites de rotação
 int LimiteServoVerticalMin = 15;     // Estabele os limites de rotação
 
-int LDRDC = 48;             // Inicia LDRDC no pino A0
-int LDRDB = 47;             // Inicia LDRDB no pino A1
-int LDREC = 42;             // Inicia LDREC no pino A2
-int LDREB = 41;             // Inicia LDREB no pino A3
+int LDRDC = 7;             // Inicia LDRDC no pino A0
+int LDRDB = 6;             // Inicia LDRDB no pino A1
+int LDREC = 5;             // Inicia LDREC no pino A2
+int LDREB = 4;             // Inicia LDREB no pino A3
 
 bool sistemaLigado = true;
 bool reiniciarSistema = false;
@@ -285,20 +285,24 @@ void ajustarHorariosPorEstacao(){
 
     switch(estacaoNumero){
     case 1: // Verão
-      hora_desligar = 20;
+      hora_desligar = 20 ;
       hora_ligar = 6;
+      Serial.printf("Verão");
       break;
     case 2: // Outono
       hora_desligar = 18;
       hora_ligar = 7;
+      Serial.printf("Outono");
       break;
     case 3: // Inverno
       hora_desligar = 17;
       hora_ligar = 7;
+      Serial.printf("Inverno");
       break;
     case 4: // Primavera
       hora_desligar = 19;
       hora_ligar = 6;
+      Serial.printf("Primaveira");
       break;
     }
 
@@ -323,14 +327,23 @@ String getCurrentTime() {
   if (millis() - lastTimeUpdate >= 60000) { // 60000ms = 1 minuto
     lastTimeUpdate = millis();
     currentMinute++;
+    
     if (currentMinute >= 60) {
       currentMinute = 0;
       currentHour++;
+      
       if (currentHour >= 24) {
         currentHour = 0;
       }
     }
+
+    // Reset do controle manual às 6:00
+    if (currentHour == 6 && currentMinute == 0) {
+      sobrescreverAuto = false;
+      Serial.println("Reset automático: sobrescreverAuto = false (6:00)");
+    }
   }
+
   char timeStr[6];
   snprintf(timeStr, sizeof(timeStr), "%02d:%02d", currentHour, currentMinute);
   return String(timeStr);
@@ -345,8 +358,14 @@ void handleConfig() {
 }
 
 void handleSaveConfig() {
-    if (server.hasArg("estacaoAno")) {
-      estacaoNumero = server.arg("estacaoAno").toInt();
+    if(server.hasArg("estacaoAno")){
+      estacaoAno = server.arg("estacaoAno");
+      if (estacaoAno == "Verao") estacaoNumero = 1;
+      else if (estacaoAno == "Outono") estacaoNumero = 2;
+      else if (estacaoAno == "Inverno") estacaoNumero = 3;
+      else if (estacaoAno == "Primavera") estacaoNumero = 4;
+      else estacaoNumero = 0;
+        
       ajustarHorariosPorEstacao();
     }
     server.sendHeader("Location", "/");
@@ -370,13 +389,15 @@ void handleToggle() {
 bool shouldTurnOff() {
   String currentTime = getCurrentTime();
   int hour = currentTime.substring(0, 2).toInt();
-  return (hour == hora_desligar); // 20h (8PM)
+  int minute = currentTime.substring(3, 5).toInt();
+  return (currentHour >= hora_desligar || currentHour < hora_ligar);
 }
 
 bool shouldTurnOn() {
     String currentTime = getCurrentTime();
     int hour = currentTime.substring(0, 2).toInt();
-    return (hour == hora_ligar);
+    int minute = currentTime.substring(3, 5).toInt();
+    return (currentHour >= hora_ligar && currentHour < hora_desligar);
 }
 
 void handleRestart() {
@@ -388,8 +409,8 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  Horizontal.attach(45);     // Inicia servo Horizontal na porta D3
-  Vertical.attach(46);       // Inicia servo Vertical na porta D5
+  Horizontal.attach(1);     // Inicia servo Horizontal na porta D3
+  Vertical.attach(21);       // Inicia servo Vertical na porta D5
 
   Horizontal.write(180);    // Inicia servo Horizontal na posição 180
   Vertical.write(45);       // Inicia servo Horizontal na posição 45
@@ -399,9 +420,6 @@ void setup() {
   IPAddress IP = WiFi.softAPIP();
   Serial.print("IP Address: ");
   Serial.println(IP);
-
-  currentHour = 19;
-  currentMinute = 59;
 
   // Configura rotas do servidor web
   server.on("/toggle", HTTP_POST, handleToggle);
@@ -420,6 +438,22 @@ void setup() {
 
 void loop() {
   server.handleClient();
+
+  if (millis() - lastTimeUpdate >= 60000) {
+    lastTimeUpdate = millis();
+    currentMinute++;
+    if (currentMinute >= 60) {
+        currentMinute = 0;
+        currentHour++;
+        if (currentHour >= 24) currentHour = 0;
+    }
+    Serial.print("Hora atualizada: ");
+    Serial.print(currentHour);
+    Serial.print(":");
+    Serial.println(currentMinute);
+}
+  Serial.print(" | Hora desligar: ");
+  Serial.println(hora_desligar);
 
   if(!sobrescreverAuto){
   if (!sistemaLigado && shouldTurnOn()) {
@@ -443,6 +477,8 @@ if(currentTime == "06:00") {
     String currentTime = getCurrentTime();
 
     if(reiniciarSistema){
+      Horizontal.write(90);
+      Vertical.write(45);
       reiniciarSistema = false;
     }
       int LDC = analogRead(LDRDC);      // Leitura Analógica do LDR Direita Cima
